@@ -43,6 +43,9 @@ markdown_ext:             markdown,mkdown,mkdn,mkd,md
 # Permalinks
 permalink:                /:categories/:year-:month-:day-:title:output_ext
 
+#代码高亮
+syntax_highlighter_style: colorful
+
 # Disqus comments
 # disqushandler:            sighingnow
 
