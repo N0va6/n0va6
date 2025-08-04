@@ -55,12 +55,12 @@
 
 .book.color-theme-1 .book-body .book-header {
     background: #f3eacb;
-     color: #000
+     color: #000;
 }
 
 .book.color-theme-2 .book-body .book-header {
     background: #1c1f2b;
-     color: #000
+     color: #000;
 }
 
 .page-inner {
@@ -264,3 +264,4 @@ pre:has(code.language-mermaid[data-processed="true"]) {
     --font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
 
 }
+
