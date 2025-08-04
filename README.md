@@ -26,9 +26,10 @@ int main()
 
 可以看到我释放了ptr1但没有将指针清零导致构成UAF漏洞，当再次申请相同的0x10堆块给ptr2时，由于ptr1未被置零则ptr2拿到与ptr1相同的堆块即ptr2=ptr1
 
-![image-20250804161353287](image/image-20250804161353287.png)
+![image-20250804161353287](assets/image-20250804161353287.png)
 
 实例：like_it
 
 # double free
+
 
