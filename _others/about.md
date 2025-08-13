@@ -6,4 +6,5 @@ category: Jekyll
 layout: post
 ---
 
-This is an about page for "others" in the collections.
+敬请期待
+
