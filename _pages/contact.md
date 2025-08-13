@@ -6,4 +6,5 @@ category: Jekyll
 layout: post
 ---
 
-This is an contact page.
+敬请期待
+
